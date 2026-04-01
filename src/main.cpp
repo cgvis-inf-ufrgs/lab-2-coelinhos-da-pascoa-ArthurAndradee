@@ -337,34 +337,27 @@ int main(int argc, char *argv[])
     // Inicializa dezenas de coelhos com atributos aleatórios
     // Inicializa coelhos com atributos aleatórios
     std::vector<Bunny> flock_of_bunnies;
-    int num_bunnies = 15; // Reduzido o número de coelhos
+    int num_bunnies = 16; // Reduzido o número de coelhos
 
-for (int i = 0; i < num_bunnies; i++)
+    for (int i = 0; i < num_bunnies; i++)
     {
         Bunny b;
         b.angle = ((float)rand() / RAND_MAX) * 2.0f * 3.141592f;
 
-        b.radius = 1.5f;
+        // Ajuste 1: Raio da órbita levemente aumentado (de 1.5f para 2.2f)
+        b.radius = 1.40f;
+        
         b.base_height = 0.1f + ((float)rand() / RAND_MAX) * 0.2f;
 
         // 50% de chance de o coelho ser um "acrobata"
-        b.can_flip = ((float)rand() / RAND_MAX) > 0.5f;
+        b.can_flip = ((float)rand() / RAND_MAX) > 0.33f;
 
-        // Ajuste 1: Diferença de velocidade bem maior!
-        if (b.can_flip)
-        {
-            // Acrobatas correm rápido
-            b.angular_speed = 0.50f + ((float)rand() / RAND_MAX) * 0.20f;
-        }
-        else
-        {
-            // Normais andam devagar
-            b.angular_speed = 0.05f + ((float)rand() / RAND_MAX) * 0.10f;
-        }
+        // Ajuste 2: Todos os coelhos (girando ou não) percorrem o círculo na mesma velocidade base
+        b.angular_speed = 0.50f + ((float)rand() / RAND_MAX) * 0.05f;
 
         b.jump_height = 0.2f + ((float)rand() / RAND_MAX) * 0.2f;
 
-        // Ajuste 2: Fase de pulo aleatória (de 0 a 2*PI) para começarem em pontos diferentes da flutuação
+        // Fase de pulo aleatória (de 0 a 2*PI) para começarem em pontos diferentes da flutuação
         b.jump_phase = ((float)rand() / RAND_MAX) * 2.0f * 3.141592f; 
         b.jump_speed = 0.0f; // Não será mais usado, usaremos velocidade global
 
@@ -470,43 +463,35 @@ for (int i = 0; i < num_bunnies; i++)
         // Desenhamos o modelo do coelho e suas esferas orbitais
         // Desenhamos o modelo do coelho e suas esferas orbitais
         // Desenhamos o modelo do coelho e suas esferas orbitais
+        // Desenhamos o modelo do coelho e suas esferas orbitais
         for (auto &b : flock_of_bunnies)
         {
             // 1. Atualiza o movimento circular
             b.angle -= b.angular_speed * dt;
+            
+            // CORREÇÃO AQUI: Somar exatamente 2*PI para que a volta seja perfeita.
             if (b.angle < 0.0f)
-                b.angle += 2.0f * 3.141592f;
+            {
+                b.angle += 2.0f * 3.141592f; 
+            }
 
-            // 2. A lógica de cambalhota só roda se o coelho tiver permissão
+            // 2. A lógica de cambalhota CONTÍNUA (sem parar)
             if (b.can_flip)
             {
-                if (!b.is_flipping)
-                {
-                    b.time_until_flip -= dt;
-                    if (b.time_until_flip <= 0.0f)
-                    {
-                        b.is_flipping = true;
-                        b.flip_angle = 0.0f;
-                    }
-                }
-                else
-                {
-                    b.flip_angle += 5.0f * dt;
-                    if (b.flip_angle >= 2.0f * 3.141592f)
-                    { // Completou 360 graus
-                        b.flip_angle = 0.0f;
-                        b.is_flipping = false;
-                        b.time_until_flip = 2.0f + ((float)rand() / RAND_MAX) * 5.0f;
-                    }
+                // Ajuste 1: Gira constantemente
+                b.flip_angle += 5.0f * dt; 
+                
+                // Mantém o ângulo entre 0 e 2*PI para evitar overflow
+                if (b.flip_angle >= 2.0f * 3.141592f)
+                { 
+                    b.flip_angle -= 2.0f * 3.141592f;
                 }
             }
             
-// 3. Calcula as posições 3D do coelho (X, Y, Z)
+            // 3. Calcula as posições 3D do coelho (X, Y, Z)
             float x = b.radius * cos(b.angle);
             float z = b.radius * sin(b.angle);
 
-            // Ajuste 3: Somamos a b.jump_phase ao tempo global. 
-            // A velocidade (3.0f) é igual para todos, mas eles começam em pontos diferentes da onda!
             float global_jump_phase = current_frame_time * 3.0f + b.jump_phase;
             float y = b.base_height + sin(global_jump_phase) * b.jump_height;
 
@@ -518,31 +503,73 @@ for (int i = 0; i < num_bunnies; i++)
             // ==========================================
             glUniform1i(g_object_id_uniform, BUNNY);
 
-            glm::mat4 model_bunny = Matrix_Translate(x, y, z) * Matrix_Rotate_Y(facing_angle) * Matrix_Rotate_Z(b.flip_angle) * Matrix_Scale(0.2f, 0.2f, 0.2f);
+            glm::mat4 model_bunny = Matrix_Translate(x, y, z) 
+                                  * Matrix_Rotate_Y(facing_angle) 
+                                  * Matrix_Rotate_Z(b.flip_angle) 
+                                  * Matrix_Scale(0.2f, 0.2f, 0.2f);
 
             glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model_bunny));
             DrawVirtualObject("the_bunny");
 
-            // ==========================================
+// ==========================================
             // RENDERIZAÇÃO DAS ESFERAS ORBITAIS (OVOS)
             // ==========================================
             glUniform1i(g_object_id_uniform, SPHERE);
 
-            float orbit_angle = current_frame_time * 3.0f;
-            float orbit_radius = 0.40f;
+            float orbit_angle = current_frame_time * 2.0f;
+            float orbit_radius = 0.20f;
 
             float egg_scale_x = 0.05f;
             float egg_scale_y = 0.07f;
             float egg_scale_z = 0.05f;
 
+            // Para manter a inclinação do ovo constante (sempre em pé), 
+            // não podemos aplicar a matriz de rotação na esfera inteira, pois isso "tombaria" o ovo.
+            // Em vez disso, calculamos a posição (x, y, z) da órbita na mão usando seno e cosseno.
+            
+            // Calculamos o deslocamento na órbita vertical (plano XY relativo à tela, mas precisamos 
+            // girar isso para se alinhar com a direção que o coelho está olhando)
+            
+            // A órbita em si (antes de alinhar com o coelho)
+            float local_orbit_z = orbit_radius * cos(orbit_angle); // Usa Z para ser as laterais do coelho
+            float local_orbit_y = orbit_radius * sin(orbit_angle);
+
+            // Alinhamos essa órbita relativa com a direção que o coelho aponta (facing_angle)
+            float offset_x = local_orbit_z * sin(facing_angle);
+            float offset_z = local_orbit_z * cos(facing_angle);
+            float offset_y = local_orbit_y; // Y é Y, cima e baixo não mudam
+
+            // Posição final da Esfera 1 no mundo
+            float sphere1_x = x + offset_x;
+            float sphere1_y = y + offset_y;
+            float sphere1_z = z + offset_z;
+
             // Esfera 1 (Ovo 1)
-            glm::mat4 model_sphere1 = Matrix_Translate(x, y, z) * Matrix_Rotate_Y(facing_angle) * Matrix_Rotate_X(orbit_angle) * Matrix_Translate(0.0f, 0.0f, orbit_radius) * Matrix_Scale(egg_scale_x, egg_scale_y, egg_scale_z);
+            // A matriz agora apenas: Transláda para a posição final calculada -> Alinha o ovo com o coelho -> Aplica escala
+            glm::mat4 model_sphere1 = Matrix_Translate(sphere1_x, sphere1_y, sphere1_z) 
+                                    * Matrix_Rotate_Y(facing_angle) 
+                                    * Matrix_Scale(egg_scale_x, egg_scale_y, egg_scale_z);
 
             glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model_sphere1));
             DrawVirtualObject("the_sphere");
 
+            // --- Esfera 2 ---
+            // Fazemos o mesmo para o ovo 2, mas com o ângulo oposto (+ PI)
+            float local_orbit_z2 = orbit_radius * cos(orbit_angle + 3.141592f);
+            float local_orbit_y2 = orbit_radius * sin(orbit_angle + 3.141592f);
+
+            float offset_x2 = local_orbit_z2 * sin(facing_angle);
+            float offset_z2 = local_orbit_z2 * cos(facing_angle);
+            float offset_y2 = local_orbit_y2;
+
+            float sphere2_x = x + offset_x2;
+            float sphere2_y = y + offset_y2;
+            float sphere2_z = z + offset_z2;
+
             // Esfera 2 (Ovo 2)
-            glm::mat4 model_sphere2 = Matrix_Translate(x, y, z) * Matrix_Rotate_Y(facing_angle) * Matrix_Rotate_X(orbit_angle + 3.141592f) * Matrix_Translate(0.0f, 0.0f, orbit_radius) * Matrix_Scale(egg_scale_x, egg_scale_y, egg_scale_z);
+            glm::mat4 model_sphere2 = Matrix_Translate(sphere2_x, sphere2_y, sphere2_z) 
+                                    * Matrix_Rotate_Y(facing_angle) 
+                                    * Matrix_Scale(egg_scale_x, egg_scale_y, egg_scale_z);
 
             glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model_sphere2));
             DrawVirtualObject("the_sphere");
